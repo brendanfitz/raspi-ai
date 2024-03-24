@@ -11,7 +11,6 @@ import numpy as np
 from PIL import Image
 from PIL import ImageFont, ImageDraw
 
-from qt_gl_preview import *
 from picamera2 import *
 
 normalSize = (640, 480)
@@ -29,10 +28,8 @@ def ReadLabelFile(file_path):
   return ret
 
 def DrawRectangles(request):
-   stream = request.picam2.stream_map["main"]
-   fb = request.request.buffers[stream]
-   with fb.mmap(0) as b:
-       im = np.array(b, copy=False, dtype=np.uint8).reshape((normalSize[1],normalSize[0], 4))
+   with MappedArray(request, "main") as m:
+       im = np.array(m.array, copy=False, dtype=np.uint8).reshape((normalSize[1],normalSize[0], 4))
 
        for rect in rectangles:
           print(rect)
@@ -118,15 +115,14 @@ def main():
       label_file = None
 
     picam2 = Picamera2()
-    preview = QtGlPreview(picam2)
-    config = picam2.preview_configuration(main={"size": normalSize},
-                                          lores={"size": lowresSize, "format": "YUV420"})
+    config = picam2.create_preview_configuration(main={"size": normalSize},
+                                                 lores={"size": lowresSize, "format": "YUV420"})
     picam2.configure(config)
 
     stride = picam2.stream_configuration("lores")["stride"]
     picam2.request_callback = DrawRectangles
 
-    picam2.start()
+    picam2.start(show_preview=True)
 
     while True:
         buffer = picam2.capture_buffer("lores")

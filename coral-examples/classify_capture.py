@@ -21,9 +21,17 @@ import io
 import numpy as np
 import operator
 import os
-import picamera
+import picamera2
 import tflite_runtime.interpreter as tflite
 import time
+import PIL
+import cv2
+
+colour = (255,105,180)
+org_x, org_y, org_dy = 0, 60, 30
+font = cv2.FONT_HERSHEY_SIMPLEX
+scale = 0.5
+thickness = 1
 
 Category = collections.namedtuple('Category', ['id', 'score'])
 
@@ -37,8 +45,26 @@ def get_output(interpreter, top_k, score_threshold):
     ]
     return sorted(categories, key=operator.itemgetter(1), reverse=True)
 
+def class_to_img(request):
+    with picamera2.MappedArray(request, 'main') as m:
+        rgba_img = PIL.Image.fromarray(m.array)
+        rgb_img = rgba_img.convert('RGB')
+        start_ms = time.time()
+        common.input_tensor(interpreter)[:,:] = np.reshape(rgb_img, common.input_image_size(interpreter))
+        interpreter.invoke()
+        results = get_output(interpreter, top_k=3, score_threshold=0)
+        inference_ms = (time.time() - start_ms)*1000.0
+        fps.append(time.time())
+        fps_ms = len(fps)/(fps[-1] - fps[0])
+        annotate_text = 'Inference: {:5.2f}ms FPS: {:3.1f}'.format(inference_ms, fps_ms)
+        cv2.putText(m.array, annotate_text, (org_x, org_y), font, scale, colour, thickness)
+        for i, result in enumerate(results):
+            annotate_text = '{:.0f}% {}'.format(100*result[1], labels[result[0]])
+            cv2.putText(m.array, annotate_text, (org_x, org_y+(i+1)*org_dy), font, scale, colour, thickness)
+
+
 def main():
-    default_model_dir = '../all_models'
+    default_model_dir = './all_models'
     default_model = 'mobilenet_v2_1.0_224_quant_edgetpu.tflite'
     default_labels = 'imagenet_labels.txt'
     parser = argparse.ArgumentParser()
@@ -48,43 +74,37 @@ def main():
                         default=os.path.join(default_model_dir, default_labels))
     args = parser.parse_args()
 
+    global labels
     with open(args.labels, 'r') as f:
         pairs = (l.strip().split(maxsplit=1) for l in f.readlines())
         labels = dict((int(k), v) for k, v in pairs)
 
+    global interpreter 
     interpreter = common.make_interpreter(args.model)
     interpreter.allocate_tensors()
 
-    with picamera.PiCamera() as camera:
-        camera.resolution = (640, 480)
-        camera.framerate = 30
-        camera.annotate_text_size = 20
+    with picamera2.Picamera2() as camera:
         width, height, channels = common.input_image_size(interpreter)
-        camera.start_preview()
+        # camera.annotate_text_size = 20
+        config = camera.create_video_configuration(
+            main=dict(size=(width, height)),
+            # lores=dict(size=(width, height))
+        )
+        camera.video_configuration.controls.FrameRate = 30.0
+        camera.configure(config)
+
+        camera.post_callback = class_to_img
+
+        camera.start(show_preview=True)
         try:
+            global stream, fps
             stream = io.BytesIO()
             fps = deque(maxlen=20)
             fps.append(time.time())
-            for foo in camera.capture_continuous(stream,
-                                                 format='rgb',
-                                                 use_video_port=True,
-                                                 resize=(width, height)):
-                stream.truncate()
-                stream.seek(0)
-                input = np.frombuffer(stream.getvalue(), dtype=np.uint8)
-                start_ms = time.time()
-                common.input_tensor(interpreter)[:,:] = np.reshape(input, common.input_image_size(interpreter))
-                interpreter.invoke()
-                results = get_output(interpreter, top_k=3, score_threshold=0)
-                inference_ms = (time.time() - start_ms)*1000.0
-                fps.append(time.time())
-                fps_ms = len(fps)/(fps[-1] - fps[0])
-                camera.annotate_text = 'Inference: {:5.2f}ms FPS: {:3.1f}'.format(inference_ms, fps_ms)
-                for result in results:
-                   camera.annotate_text += '\n{:.0f}% {}'.format(100*result[1], labels[result[0]])
-                print(camera.annotate_text)
+            while True:
+                pass
         finally:
-            camera.stop_preview()
+            camera.stop()
 
 
 if __name__ == '__main__':
