@@ -28,10 +28,10 @@ import PIL
 import cv2
 
 colour = (255,105,180)
-org_x, org_y, org_dy = 0, 30, 30
+org_x, org_y, org_dy = 0, 70, 70
 font = cv2.FONT_HERSHEY_SIMPLEX
-scale = 0.75
-thickness = 2
+scale = 2.5
+thickness = 4
 
 Category = collections.namedtuple('Category', ['id', 'score'])
 
@@ -74,7 +74,7 @@ def main():
     with picamera2.Picamera2() as camera:
         width, height, channels = common.input_image_size(interpreter)
         config = camera.create_video_configuration(
-            main=dict(size=(640, 480)),
+            main=dict(size=(1080, 1080)),
             lores=dict(size=(width, height))
         )
         camera.video_configuration.controls.FrameRate = 30.0
@@ -91,12 +91,19 @@ def main():
         try:
             while True:
                 time.sleep(1)
-                buffer = camera.capture_buffer("lores")
-                grey = buffer[:s1 * h1].reshape((h1, s1))
-                rgb = cv2.cvtColor(grey,cv2.COLOR_GRAY2RGB)
-                rgb = cv2.resize(rgb, (width, height))
-                PIL.Image.fromarray(rgb).save('input_image.jpg')
-                input_data = np.expand_dims(rgb, axis=0)
+                mb = camera.capture_array("main")
+                mb = PIL.Image.fromarray(mb)
+                mb = mb.convert('RGB')
+                mb = mb.resize((width, height))
+                mb.save('main_input_image.jpg')
+                mb = np.array(mb)
+
+                # buffer = camera.capture_buffer("lores")
+                # grey = buffer[:s1 * h1].reshape((h1, s1))
+                # rgb = cv2.cvtColor(grey,cv2.COLOR_GRAY2RGB)
+                # rgb = cv2.resize(rgb, (width, height))
+                # PIL.Image.fromarray(rgb).save('input_image.jpg')
+                input_data = np.expand_dims(mb, axis=0)
                 common.input_tensor(interpreter)[:,:] = np.reshape(input_data, common.input_image_size(interpreter))
                 interpreter.invoke()
                 results = get_output(interpreter, top_k=3, score_threshold=0)
