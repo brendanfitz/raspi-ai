@@ -28,10 +28,10 @@ import PIL
 import cv2
 
 colour = (255,105,180)
-org_x, org_y, org_dy = 0, 60, 30
+org_x, org_y, org_dy = 0, 15, 15
 font = cv2.FONT_HERSHEY_SIMPLEX
-scale = 0.5
-thickness = 1
+scale = 0.4
+thickness = 2
 
 Category = collections.namedtuple('Category', ['id', 'score'])
 
@@ -49,18 +49,12 @@ def class_to_img(request):
     with picamera2.MappedArray(request, 'main') as m:
         rgba_img = PIL.Image.fromarray(m.array)
         rgb_img = rgba_img.convert('RGB')
-        start_ms = time.time()
         common.input_tensor(interpreter)[:,:] = np.reshape(rgb_img, common.input_image_size(interpreter))
         interpreter.invoke()
         results = get_output(interpreter, top_k=3, score_threshold=0)
-        inference_ms = (time.time() - start_ms)*1000.0
-        fps.append(time.time())
-        fps_ms = len(fps)/(fps[-1] - fps[0])
-        annotate_text = 'Inference: {:5.2f}ms FPS: {:3.1f}'.format(inference_ms, fps_ms)
-        cv2.putText(m.array, annotate_text, (org_x, org_y), font, scale, colour, thickness)
         for i, result in enumerate(results):
             annotate_text = '{:.0f}% {}'.format(100*result[1], labels[result[0]])
-            cv2.putText(m.array, annotate_text, (org_x, org_y+(i+1)*org_dy), font, scale, colour, thickness)
+            cv2.putText(m.array, annotate_text, (org_x, org_y+i*org_dy), font, scale, colour, thickness)
 
 
 def main():
@@ -97,10 +91,6 @@ def main():
 
         camera.start(show_preview=True)
         try:
-            global stream, fps
-            stream = io.BytesIO()
-            fps = deque(maxlen=20)
-            fps.append(time.time())
             while True:
                 pass
         finally:
