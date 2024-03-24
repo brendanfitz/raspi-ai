@@ -28,9 +28,9 @@ import PIL
 import cv2
 
 colour = (255,105,180)
-org_x, org_y, org_dy = 0, 15, 15
+org_x, org_y, org_dy = 0, 30, 30
 font = cv2.FONT_HERSHEY_SIMPLEX
-scale = 0.4
+scale = 0.75
 thickness = 2
 
 Category = collections.namedtuple('Category', ['id', 'score'])
@@ -47,11 +47,6 @@ def get_output(interpreter, top_k, score_threshold):
 
 def class_to_img(request):
     with picamera2.MappedArray(request, 'main') as m:
-        rgba_img = PIL.Image.fromarray(m.array)
-        rgb_img = rgba_img.convert('RGB')
-        common.input_tensor(interpreter)[:,:] = np.reshape(rgb_img, common.input_image_size(interpreter))
-        interpreter.invoke()
-        results = get_output(interpreter, top_k=3, score_threshold=0)
         for i, result in enumerate(results):
             annotate_text = '{:.0f}% {}'.format(100*result[1], labels[result[0]])
             cv2.putText(m.array, annotate_text, (org_x, org_y+i*org_dy), font, scale, colour, thickness)
@@ -73,16 +68,14 @@ def main():
         pairs = (l.strip().split(maxsplit=1) for l in f.readlines())
         labels = dict((int(k), v) for k, v in pairs)
 
-    global interpreter 
     interpreter = common.make_interpreter(args.model)
     interpreter.allocate_tensors()
 
     with picamera2.Picamera2() as camera:
         width, height, channels = common.input_image_size(interpreter)
-        # camera.annotate_text_size = 20
         config = camera.create_video_configuration(
-            main=dict(size=(width, height)),
-            # lores=dict(size=(width, height))
+            main=dict(size=(640, 480)),
+            lores=dict(size=(width, height))
         )
         camera.video_configuration.controls.FrameRate = 30.0
         camera.configure(config)
@@ -90,9 +83,23 @@ def main():
         camera.post_callback = class_to_img
 
         camera.start(show_preview=True)
+        
+        (w1, h1) = camera.stream_configuration("lores")["size"]
+        s1 = camera.stream_configuration("lores")["stride"]
+        global results
+        results = []
         try:
             while True:
-                pass
+                time.sleep(1)
+                buffer = camera.capture_buffer("lores")
+                grey = buffer[:s1 * h1].reshape((h1, s1))
+                rgb = cv2.cvtColor(grey,cv2.COLOR_GRAY2RGB)
+                rgb = cv2.resize(rgb, (width, height))
+                PIL.Image.fromarray(rgb).save('input_image.jpg')
+                input_data = np.expand_dims(rgb, axis=0)
+                common.input_tensor(interpreter)[:,:] = np.reshape(input_data, common.input_image_size(interpreter))
+                interpreter.invoke()
+                results = get_output(interpreter, top_k=3, score_threshold=0)
         finally:
             camera.stop()
 
