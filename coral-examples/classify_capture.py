@@ -26,6 +26,10 @@ import tflite_runtime.interpreter as tflite
 import time
 import PIL
 import cv2
+import pygame
+
+pygame.init()
+fart = pygame.mixer.Sound('./building_blocks/fart.mp3')
 
 colour = (255,105,180)
 org_x, org_y, org_dy = 0, 70, 70
@@ -107,6 +111,12 @@ def main():
                 common.input_tensor(interpreter)[:,:] = np.reshape(input_data, common.input_image_size(interpreter))
                 interpreter.invoke()
                 results = get_output(interpreter, top_k=3, score_threshold=0)
+                result_labels = [labels[result[0]] for result in results]
+
+                if 'banana' in result_labels:
+                    playing = fart.play()
+                    while playing.get_busy():
+                        pygame.time.delay(100)
         finally:
             camera.stop()
 
