@@ -163,3 +163,4 @@ cython_debug/
 all_models/
 input_image.jpg
 main_input_image.jpg
+data/
