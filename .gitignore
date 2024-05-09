@@ -167,3 +167,4 @@ data/
 .jupyter
 face_detection/logs/
 facetracker.h5
+face_detection/wandb/
