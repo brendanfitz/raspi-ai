@@ -164,3 +164,6 @@ all_models/
 input_image.jpg
 main_input_image.jpg
 data/
+.jupyter
+face_detection/logs/
+facetracker.h5
