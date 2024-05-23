@@ -168,3 +168,5 @@ data/
 face_detection/logs/
 facetracker.h5
 face_detection/wandb/
+face_detection_v2/wandb/
+face_detection_v2/logs/
