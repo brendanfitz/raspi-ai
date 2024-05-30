@@ -42,6 +42,8 @@ def create_ds(data_subset, batch_size=128, prefetch=4, shuffle=True, include_fns
         ds = ds.shuffle(len(ds))
 
     ds = ds.batch(batch_size)
-    ds = ds.prefetch(prefetch)
+
+    if prefetch:
+        ds = ds.prefetch(prefetch)
 
     return ds
