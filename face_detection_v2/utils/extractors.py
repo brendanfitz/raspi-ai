@@ -26,7 +26,7 @@ def load_labels(label_path):
         label_data = json.load(f)
 
     labels = [int(x in label_data['classes']) for x in range(1, 3)]
-    labels = [1 if sum(labels) > 0 else 0]
+    # labels = [1 if sum(labels) > 0 else 0]
 
     bboxes = list(itertools.chain(*label_data['bboxes']))
 
